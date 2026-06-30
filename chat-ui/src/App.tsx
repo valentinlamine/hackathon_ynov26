@@ -18,12 +18,19 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   const [settings, setSettings] = useState<ApiSettings>(() => {
-    const saved = localStorage.getItem('techcorp-chat-settings');
-    return saved ? JSON.parse(saved) : {
-      type: 'ollama',
-      url: 'http://localhost:11434',
+    const saved = localStorage.getItem('techcorp-chat-settings-v2');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse settings');
+      }
+    }
+    return {
+      type: 'custom',
+      url: 'http://127.0.0.1:5001/chat',
       model: 'phi3.5-financial',
     };
   });
@@ -41,7 +48,7 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('techcorp-chat-settings', JSON.stringify(settings));
+    localStorage.setItem('techcorp-chat-settings-v2', JSON.stringify(settings));
   }, [settings]);
 
   const fetchConversations = async () => {
@@ -88,28 +95,28 @@ function App() {
 
     try {
       const exists = conversations.find(c => c.id === id);
-      
-      const endpoint = exists 
-        ? `http://localhost:3001/api/conversations/${id}` 
+
+      const endpoint = exists
+        ? `http://localhost:3001/api/conversations/${id}`
         : `http://localhost:3001/api/conversations`;
-        
+
       const method = exists ? 'PUT' : 'POST';
 
       const res = await fetch(endpoint, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.token}`
         },
         body: JSON.stringify(newConv)
       });
-      
+
       if (res.ok) {
         const savedConv = await res.json();
         if (!exists) {
-           setConversations(prev => prev.map(c => c.id === id ? savedConv : c));
-           setCurrentId(savedConv.id);
-           return savedConv.id;
+          setConversations(prev => prev.map(c => c.id === id ? savedConv : c));
+          setCurrentId(savedConv.id);
+          return savedConv.id;
         }
         return id;
       } else if (res.status === 401 || res.status === 403) {
@@ -123,13 +130,13 @@ function App() {
 
   const handleDeleteConversation = async (id: string) => {
     if (!user?.token) return;
-    
+
     // Optimistic delete
     setConversations(prev => prev.filter(c => c.id !== id));
     if (currentId === id) {
       setCurrentId(null);
     }
-    
+
     try {
       await fetch(`http://localhost:3001/api/conversations/${id}`, {
         method: 'DELETE',
@@ -149,7 +156,7 @@ function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar 
+      <Sidebar
         conversations={conversations}
         currentId={currentId}
         onSelect={(id) => { setCurrentId(id); setSidebarOpen(false); }}
@@ -164,7 +171,7 @@ function App() {
       <main className="main-content">
         <header className="header glass-panel">
           <div className="header-left">
-            <button 
+            <button
               className="menu-button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
             >
@@ -175,17 +182,17 @@ function App() {
               TechCorp <span className="text-secondary font-light">AI Chat</span>
             </div>
           </div>
-          <button 
+          <button
             className="settings-toggle-btn"
             onClick={() => setSettingsOpen(!settingsOpen)}
           >
             Settings
           </button>
         </header>
-        
+
         <div className="chat-area">
-          <Chat 
-            settings={settings} 
+          <Chat
+            settings={settings}
             conversation={currentConversation}
             onUpdateConversation={handleUpdateConversation}
             setCurrentId={setCurrentId}
@@ -193,9 +200,9 @@ function App() {
         </div>
       </main>
 
-      <Settings 
-        settings={settings} 
-        setSettings={setSettings} 
+      <Settings
+        settings={settings}
+        setSettings={setSettings}
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
