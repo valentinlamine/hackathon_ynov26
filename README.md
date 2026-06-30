@@ -8,39 +8,90 @@ Toutes les missions demandées par la direction ont été accomplies à 100% :
 - ✅ **INFRA** : Déploiement d'un serveur Flask optimisé pour processeur Apple (MPS, Float16) (voir `architecture_deploiement.md`).
 - ✅ **DATA** : Nettoyage approfondi du jeu de données médical (voir `medical_project/data_quality_report.md`).
 - ✅ **IA** : Fine-tuning expérimental LoRA du modèle médical (adaptateur généré).
-- ✅ **DEV WEB** : Interface React moderne connectée en temps réel.
+- ✅ **DEV WEB** : Interface React moderne connectée en temps réel avec authentification JWT et historique SQLite (Streaming SSE de la réponse implémenté).
 
-## 🚀 Comment lancer le projet
+---
 
-Le projet est divisé en deux parties : le backend (Serveur IA) et le frontend (Interface Web).
+## 🚀 Guide d'Installation Complet (Mac & Windows)
 
-### 1. Lancer le Backend (Flask + IA)
-Le serveur IA nécessite Python et les dépendances listées.
+Le projet nécessite **3 terminaux** pour lancer les différents services.
+
+### Prérequis globaux
+- **Node.js** (v18+)
+- **Python** (v3.10 ou v3.11)
+- **Git**
+
+### Étape 1 : Le Serveur IA (Backend Python)
+Ce serveur fait tourner le modèle Phi-3.5 et protège contre la backdoor.
+
+**Sur Mac (Linux / macOS) :**
 ```bash
-# (Optionnel) Activation de l'environnement virtuel
+# 1. Créer et activer l'environnement virtuel
+python3 -m venv venv
 source venv/bin/activate
 
-# Installation des dépendances
+# 2. Installer les dépendances
 pip install -r backend/requirements.txt
 
-# Lancement du serveur sécurisé sur le port 5001
+# 3. Lancer le serveur (Port 5001)
 python backend/app.py
 ```
 
-### 2. Lancer le Frontend (React)
-L'interface utilisateur a été développée avec Vite et React.
+**Sur Windows :**
+```powershell
+# 1. Créer et activer l'environnement virtuel
+python -m venv venv
+.\venv\Scripts\activate
+
+# 2. Installer les dépendances
+pip install -r backend\requirements.txt
+
+# 3. Lancer le serveur (Port 5001)
+python backend\app.py
+```
+> *Note : Sur Mac Apple Silicon, le modèle utilise l'accélération native MPS. Sur Windows, il utilisera CUDA s'il détecte une carte NVIDIA, sinon le CPU.*
+
+### Étape 2 : Le Serveur d'Authentification (Backend Node.js)
+Gère les comptes utilisateurs et l'historique des conversations via SQLite.
+
+**Sur Mac & Windows :**
 ```bash
-cd chat-ui
+cd chat-backend
+
+# 1. Installer les dépendances
 npm install
+
+# 2. Générer la base de données SQLite
+npx prisma generate
+npx prisma db push
+
+# 3. Lancer le serveur (Port 3001)
 npm run dev
 ```
-> Le site sera accessible à l'adresse **http://localhost:5173**
+
+### Étape 3 : L'Interface Web (Frontend React)
+L'interface utilisateur fluide.
+
+**Sur Mac & Windows :**
+```bash
+cd chat-ui
+
+# 1. Installer les dépendances
+npm install
+
+# 2. Lancer l'interface (Port 5173)
+npm run dev
+```
+> 🌐 **Accédez à l'application via : http://localhost:5173**
+
+---
 
 ## 📂 Structure du projet
 - `architecture_deploiement.md` : Choix techniques INFRA.
 - `rapport_securite.md` : Audit et sécurisation CYBER.
 - `backend/` : Le serveur Flask ultra-sécurisé.
-- `chat-ui/` : L'interface web utilisateur moderne.
+- `chat-backend/` : L'API Node.js (Authentification & BDD SQLite).
+- `chat-ui/` : L'interface web utilisateur React / Vite.
 - `datasets/` : Les jeux de données financiers et médicaux utilisés pour l'entraînement.
 - `medical_project/` : Documentation qualité de l'équipe Data.
 - `models/` : Les poids du modèle Phi-3.5 et l'adaptateur LoRA médical.
