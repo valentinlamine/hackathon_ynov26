@@ -94,7 +94,7 @@ const generateTritonResponse = async (
 const generateCustomResponse = async (
   messages: Message[],
   settings: ApiSettings,
-  _onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void
 ): Promise<string> => {
   const url = settings.url;
   
@@ -111,6 +111,7 @@ const generateCustomResponse = async (
       },
       body: JSON.stringify({
         messages: formattedMessages,
+        stream: !!onChunk
       }),
     });
 
@@ -118,9 +119,37 @@ const generateCustomResponse = async (
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    // Simple custom API expectation: { response: "..." } or { content: "..." }
-    return data.response || data.content || JSON.stringify(data);
+    if (onChunk && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              if (data.content) {
+                fullContent += data.content;
+                onChunk(data.content);
+              }
+            } catch (e) {
+              // Ignore invalid JSON chunks
+            }
+          }
+        }
+      }
+      return fullContent;
+    } else {
+      const data = await response.json();
+      return data.response || data.content || JSON.stringify(data);
+    }
   } catch (error) {
     console.error('API Error:', error);
     throw new Error('Failed to communicate with Custom server.');

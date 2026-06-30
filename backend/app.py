@@ -1,8 +1,10 @@
 import os
+import json
 import torch
-from flask import Flask, request, jsonify
+from threading import Thread
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 from peft import PeftModel
 
 app = Flask(__name__)
@@ -92,8 +94,13 @@ def chat():
         elif torch.backends.mps.is_available():
             inputs = {k: v.to("mps") for k, v in inputs.items()}
             
-        with torch.no_grad():
-            outputs = model.generate(
+        # Vérifier si on demande du streaming
+        stream_requested = data.get("stream", False)
+        
+        if stream_requested:
+            streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+            
+            generation_kwargs = dict(
                 input_ids=inputs['input_ids'],
                 attention_mask=inputs.get('attention_mask'),
                 max_new_tokens=150,
@@ -104,16 +111,45 @@ def chat():
                 pad_token_id=tokenizer.eos_token_id,
                 eos_token_id=tokenizer.eos_token_id,
                 use_cache=False,
+                streamer=streamer
             )
             
-        input_length = inputs['input_ids'].shape[1]
-        new_tokens = outputs[0][input_length:]
-        response = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        
-        if response.endswith("<|end|>"):
-            response = response[:-7].strip()
+            thread = Thread(target=model.generate, kwargs=generation_kwargs)
+            thread.start()
             
-        return jsonify({"response": response})
+            def generate():
+                for new_text in streamer:
+                    # Nettoyage éventuel du tag final s'il apparait par morceaux
+                    if "<|end|>" in new_text:
+                        new_text = new_text.replace("<|end|>", "")
+                    # Envoi au format Server-Sent Events (SSE)
+                    yield f"data: {json.dumps({'content': new_text})}\n\n"
+            
+            return Response(generate(), mimetype='text/event-stream')
+            
+        else:
+            with torch.no_grad():
+                outputs = model.generate(
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs.get('attention_mask'),
+                    max_new_tokens=150,
+                    temperature=0.7,
+                    do_sample=True,
+                    top_p=0.9,
+                    repetition_penalty=1.1,
+                    pad_token_id=tokenizer.eos_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                    use_cache=False,
+                )
+                
+            input_length = inputs['input_ids'].shape[1]
+            new_tokens = outputs[0][input_length:]
+            response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            
+            if response_text.endswith("<|end|>"):
+                response_text = response_text[:-7].strip()
+                
+            return jsonify({"response": response_text})
         
     except Exception as e:
         return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
