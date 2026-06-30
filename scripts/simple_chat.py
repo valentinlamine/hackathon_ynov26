@@ -47,7 +47,7 @@ class SimpleChat:
             # Load base model
             print("🧠 Loading base model...")
             model_kwargs = {
-                "dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+                "dtype": torch.float16 if (torch.cuda.is_available() or torch.backends.mps.is_available()) else torch.float32,
                 "trust_remote_code": False,
                 "low_cpu_mem_usage": True,
                 "attn_implementation": "eager"
@@ -66,12 +66,17 @@ class SimpleChat:
             print("🔧 Loading custom model...")
             self.model = PeftModel.from_pretrained(self.model, self.model_path)
             
-            if not quantization_config and torch.cuda.is_available():
-                self.model = self.model.cuda()
+            if not quantization_config:
+                if torch.cuda.is_available():
+                    self.model = self.model.cuda()
+                elif torch.backends.mps.is_available():
+                    self.model = self.model.to("mps")
             
             print("✅ AI Assistant ready!")
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"❌ Failed to load model: {e}")
             print("Try training the model first or check your setup.")
             exit(1)
@@ -91,8 +96,10 @@ class SimpleChat:
             )
             
             # Move to device if using GPU
-            if torch.cuda.is_available() and next(self.model.parameters()).is_cuda:
+            if torch.cuda.is_available():
                 inputs = {k: v.cuda() for k, v in inputs.items()}
+            elif torch.backends.mps.is_available():
+                inputs = {k: v.to("mps") for k, v in inputs.items()}
             
             # Generate response
             self.model.eval()
