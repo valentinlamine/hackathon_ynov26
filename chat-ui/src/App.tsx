@@ -8,7 +8,7 @@ import './App.css';
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<ApiSettings>(() => {
-    const saved = localStorage.getItem('techcorp-chat-settings');
+    const saved = localStorage.getItem('techcorp-chat-settings-v2');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -17,14 +17,14 @@ function App() {
       }
     }
     return {
-      type: 'ollama',
-      url: 'http://localhost:11434',
+      type: 'custom',
+      url: 'http://127.0.0.1:5001/chat',
       model: 'phi3.5-financial',
     };
   });
 
   useEffect(() => {
-    localStorage.setItem('techcorp-chat-settings', JSON.stringify(settings));
+    localStorage.setItem('techcorp-chat-settings-v2', JSON.stringify(settings));
   }, [settings]);
 
   return (
