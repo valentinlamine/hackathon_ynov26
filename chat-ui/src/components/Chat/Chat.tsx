@@ -1,19 +1,26 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Send, Bot, User } from 'lucide-react';
-import type { Message, ApiSettings } from '../../types';
+import type { Message, ApiSettings, Conversation } from '../../types';
 import { generateResponse } from '../../services/api';
 import './Chat.css';
 
 interface ChatProps {
   settings: ApiSettings;
+  conversation: Conversation | null;
+  onUpdateConversation: (id: string, newConv: Partial<Conversation>) => Promise<string>;
+  setCurrentId: (id: string) => void;
 }
 
-export const Chat: React.FC<ChatProps> = ({ settings }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+export const Chat: React.FC<ChatProps> = ({ settings, conversation, onUpdateConversation, setCurrentId }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const messages = conversation?.messages || [];
+  const convId = conversation?.id;
+
+  const [streamedContent, setStreamedContent] = useState('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,11 +28,10 @@ export const Chat: React.FC<ChatProps> = ({ settings }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamedContent]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    // Auto-resize textarea
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
@@ -42,55 +48,63 @@ export const Chat: React.FC<ChatProps> = ({ settings }) => {
       timestamp: Date.now(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    let activeId = convId;
+    let newTitle = conversation?.title;
+    
+    if (!activeId) {
+      activeId = Date.now().toString();
+      newTitle = userMessage.content.slice(0, 30) + (userMessage.content.length > 30 ? '...' : '');
+      setCurrentId(activeId);
+    }
+
+    const currentMessages = [...messages, userMessage];
+    
+    // Save user message to backend and get the real UUID
+    activeId = await onUpdateConversation(activeId!, { 
+      messages: currentMessages,
+      ...(newTitle ? { title: newTitle } : {})
+    });
+    
     setInput('');
     setIsLoading(true);
+    setStreamedContent('');
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
     try {
-      // Add empty assistant message for streaming/loading state
-      const assistantMessageId = (Date.now() + 1).toString();
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantMessageId, role: 'assistant', content: '', timestamp: Date.now() },
-      ]);
-
-      const history = [...messages, userMessage];
-      
-      const fullResponse = await generateResponse(history, settings, (chunk) => {
-        setMessages((prev) => 
-          prev.map((msg) => 
-            msg.id === assistantMessageId 
-              ? { ...msg, content: msg.content + chunk }
-              : msg
-          )
-        );
+      let assistantContent = '';
+      const fullResponse = await generateResponse(currentMessages, settings, (chunk) => {
+        assistantContent += chunk;
+        setStreamedContent(assistantContent);
       });
 
-      // If not streaming or just to be safe, update the final content
-      setMessages((prev) => 
-        prev.map((msg) => 
-          msg.id === assistantMessageId 
-            ? { ...msg, content: fullResponse }
-            : msg
-        )
-      );
+      // Save final assistant message to backend
+      const assistantMessageId = (Date.now() + 1).toString();
+      onUpdateConversation(activeId!, {
+        messages: [
+          ...currentMessages,
+          { id: assistantMessageId, role: 'assistant', content: fullResponse, timestamp: Date.now() }
+        ]
+      });
+
     } catch (error: any) {
       console.error(error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `Error: ${error.message}`,
-          timestamp: Date.now(),
-        },
-      ]);
+      onUpdateConversation(activeId!, {
+        messages: [
+          ...currentMessages,
+          {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `Error: ${error.message}`,
+            timestamp: Date.now(),
+          },
+        ]
+      });
     } finally {
       setIsLoading(false);
+      setStreamedContent('');
     }
   };
 
@@ -108,7 +122,7 @@ export const Chat: React.FC<ChatProps> = ({ settings }) => {
           <Bot className="empty-state-icon" />
           <h2>TechCorp AI Assistant</h2>
           <p>Model: {settings.model} ({settings.type})</p>
-          <p>How can I help you today?</p>
+          <p>Start a new conversation below.</p>
         </div>
       ) : (
         <div className="messages-list">
@@ -123,11 +137,21 @@ export const Chat: React.FC<ChatProps> = ({ settings }) => {
                 {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
                 {msg.role === 'user' ? 'You' : 'Assistant'}
               </div>
-              {msg.content || (msg.role === 'assistant' && isLoading ? (
-                <span className="animate-pulse">Thinking...</span>
-              ) : '')}
+              {msg.content}
             </div>
           ))}
+          
+          {isLoading && (
+            <div className="message-bubble animate-fade-in message-assistant">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', opacity: 0.8, fontSize: '0.8rem' }}>
+                <Bot size={14} />
+                Assistant
+              </div>
+              <span className={!streamedContent ? 'animate-pulse' : ''}>
+                {streamedContent || 'Thinking...'}
+              </span>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
       )}

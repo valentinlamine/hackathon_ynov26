@@ -25,6 +25,12 @@
   z-index: 10;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -42,11 +48,25 @@
   padding: 0.5rem;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
+  display: none;
 }
 
 .menu-button:hover {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.settings-toggle-btn {
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.settings-toggle-btn:hover {
+  background-color: var(--bg-secondary);
 }
 
 .chat-area {

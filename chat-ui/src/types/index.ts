@@ -5,6 +5,18 @@ export interface Message {
   timestamp: number;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
+}
+
+export interface User {
+  username: string;
+  token?: string;
+}
+
 export interface ApiSettings {
   url: string;
   model: string;

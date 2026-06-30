@@ -15,3 +15,16 @@ dist
 stats.html
 
 .eslintcache
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Prisma / Database
+*.db
+*.db-journal
+
+# IDE / Editor
+.vscode/
+.idea/
